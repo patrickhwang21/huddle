@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -57,6 +54,14 @@ class DefaultFirebaseOptions {
     appId: '1:331659694916:android:75772a12a5749c60c47d11',
     messagingSenderId: '331659694916',
     projectId: 'huddle-app-28081',
+    storageBucket: 'huddle-app-28081.firebasestorage.app',
+  );
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDinRhg14SRMT178xYUkkZLAfUkel9Yy9o',
+    appId: '1:331659694916:web:9f7d9642b6a4d3d5c47d11',
+    messagingSenderId: '331659694916',
+    projectId: 'huddle-app-28081',
+    authDomain: 'huddle-app-28081.firebaseapp.com',
     storageBucket: 'huddle-app-28081.firebasestorage.app',
   );
 }

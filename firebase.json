@@ -11,7 +11,10 @@
       "dart": {
         "lib/firebase_options.dart": {
           "projectId": "huddle-app-28081",
-          "configurations": { "android": "1:331659694916:android:75772a12a5749c60c47d11" }
+          "configurations": {
+            "android": "1:331659694916:android:75772a12a5749c60c47d11",
+            "web": "1:331659694916:web:9f7d9642b6a4d3d5c47d11"
+          }
         }
       }
     }
@@ -21,5 +24,19 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }
