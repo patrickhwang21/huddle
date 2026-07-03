@@ -35,6 +35,10 @@ class _AvailabilityGridScreenState extends State<AvailabilityGridScreen> {
   bool _loadingParticipant = true;
   bool _saving = false;
 
+  final ScrollController _scrollController = ScrollController();
+  final Map<int, Offset> _activePointers = {};
+  bool _gridDragActive = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -70,9 +74,11 @@ class _AvailabilityGridScreenState extends State<AvailabilityGridScreen> {
 
   String _key(int col, int row) => '$col-$row';
 
-  void _handlePointer(Offset localPos, double totalWidth, int dateCount, int rowCount, {required bool isStart}) {
-    final colWidth = (totalWidth - _labelColWidth) / dateCount;
-    final col = ((localPos.dx - _labelColWidth) / colWidth).floor().clamp(0, dateCount - 1);
+  /// [localPos] is relative to the cell area only (the label column is a
+  /// separate widget, not included in this coordinate space).
+  void _handlePointer(Offset localPos, double cellAreaWidth, int dateCount, int rowCount, {required bool isStart}) {
+    final colWidth = cellAreaWidth / dateCount;
+    final col = (localPos.dx / colWidth).floor().clamp(0, dateCount - 1);
     final row = (localPos.dy / _cellHeight).floor().clamp(0, rowCount - 1);
     final k = _key(col, row);
     if (_dragTouched.contains(k)) return;
@@ -87,6 +93,12 @@ class _AvailabilityGridScreenState extends State<AvailabilityGridScreen> {
         _selected.remove(k);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   List<String> _hourLabels(HuddleEvent event) {
@@ -163,6 +175,8 @@ class _AvailabilityGridScreenState extends State<AvailabilityGridScreen> {
                 final rowsPerHour = rowCount ~/ hourLabels.length.clamp(1, rowCount);
 
                 return SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: _gridDragActive ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -203,52 +217,99 @@ class _AvailabilityGridScreenState extends State<AvailabilityGridScreen> {
                               const SizedBox(height: 4),
                               LayoutBuilder(
                                 builder: (context, constraints) {
-                                  final totalWidth = constraints.maxWidth;
+                                  final cellAreaWidth = constraints.maxWidth - _labelColWidth;
                                   return Container(
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(color: const Color(0xFFF0F0F3)),
                                     ),
                                     clipBehavior: Clip.antiAlias,
-                                    child: GestureDetector(
-                                      onPanStart: (d) {
-                                        _dragTouched.clear();
-                                        _handlePointer(d.localPosition, totalWidth, dates.length, rowCount, isStart: true);
-                                      },
-                                      onPanUpdate: (d) =>
-                                          _handlePointer(d.localPosition, totalWidth, dates.length, rowCount, isStart: false),
-                                      onPanEnd: (_) => _dragTouched.clear(),
-                                      child: Column(
-                                        children: [
-                                          for (var row = 0; row < rowCount; row++)
-                                            Row(
+                                    // The hour-label column is deliberately left outside the
+                                    // Listener below, so dragging on the labels (an area with
+                                    // no time blocks) scrolls the page normally instead of
+                                    // fighting the selection gesture - this is the fix for
+                                    // "large time window makes selecting hard to do".
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Column(
+                                          children: [
+                                            for (var row = 0; row < rowCount; row++)
+                                              SizedBox(
+                                                width: _labelColWidth,
+                                                height: _cellHeight,
+                                                child: rowsPerHour > 0 && row % rowsPerHour == 0 && row ~/ rowsPerHour < hourLabels.length
+                                                    ? Transform.translate(
+                                                        offset: const Offset(0, -7),
+                                                        child: Text(hourLabels[row ~/ rowsPerHour],
+                                                            textAlign: TextAlign.right,
+                                                            style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                                                      )
+                                                    : null,
+                                              ),
+                                          ],
+                                        ),
+                                        Expanded(
+                                          child: Listener(
+                                            behavior: HitTestBehavior.opaque,
+                                            onPointerDown: (event) {
+                                              _activePointers[event.pointer] = event.position;
+                                              setState(() => _gridDragActive = true);
+                                              // Only the first finger paints cells; a second
+                                              // finger switches to two-finger scroll instead.
+                                              if (_activePointers.length == 1) {
+                                                _dragTouched.clear();
+                                                _handlePointer(event.localPosition, cellAreaWidth, dates.length, rowCount, isStart: true);
+                                              }
+                                            },
+                                            onPointerMove: (event) {
+                                              if (_activePointers.length >= 2) {
+                                                final previous = _activePointers[event.pointer];
+                                                _activePointers[event.pointer] = event.position;
+                                                if (previous != null && _scrollController.hasClients) {
+                                                  final dy = event.position.dy - previous.dy;
+                                                  final position = _scrollController.position;
+                                                  final newOffset =
+                                                      (position.pixels - dy).clamp(position.minScrollExtent, position.maxScrollExtent);
+                                                  _scrollController.jumpTo(newOffset);
+                                                }
+                                              } else if (_activePointers.length == 1) {
+                                                _activePointers[event.pointer] = event.position;
+                                                _handlePointer(event.localPosition, cellAreaWidth, dates.length, rowCount, isStart: false);
+                                              }
+                                            },
+                                            onPointerUp: (event) {
+                                              _activePointers.remove(event.pointer);
+                                              _dragTouched.clear();
+                                              if (_activePointers.isEmpty) setState(() => _gridDragActive = false);
+                                            },
+                                            onPointerCancel: (event) {
+                                              _activePointers.remove(event.pointer);
+                                              _dragTouched.clear();
+                                              if (_activePointers.isEmpty) setState(() => _gridDragActive = false);
+                                            },
+                                            child: Column(
                                               children: [
-                                                SizedBox(
-                                                  width: _labelColWidth,
-                                                  height: _cellHeight,
-                                                  child: rowsPerHour > 0 && row % rowsPerHour == 0 && row ~/ rowsPerHour < hourLabels.length
-                                                      ? Transform.translate(
-                                                          offset: const Offset(0, -7),
-                                                          child: Text(hourLabels[row ~/ rowsPerHour],
-                                                              textAlign: TextAlign.right,
-                                                              style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
-                                                        )
-                                                      : null,
-                                                ),
-                                                for (var col = 0; col < dates.length; col++)
-                                                  Expanded(
-                                                    child: Container(
-                                                      height: _cellHeight,
-                                                      decoration: BoxDecoration(
-                                                        color: _selected.contains(_key(col, row)) ? AppColors.primary : Colors.white,
-                                                        border: Border.all(color: const Color(0xFFF0F0F3), width: 1),
-                                                      ),
-                                                    ),
+                                                for (var row = 0; row < rowCount; row++)
+                                                  Row(
+                                                    children: [
+                                                      for (var col = 0; col < dates.length; col++)
+                                                        Expanded(
+                                                          child: Container(
+                                                            height: _cellHeight,
+                                                            decoration: BoxDecoration(
+                                                              color: _selected.contains(_key(col, row)) ? AppColors.primary : Colors.white,
+                                                              border: Border.all(color: const Color(0xFFF0F0F3), width: 1),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
                                               ],
                                             ),
-                                        ],
-                                      ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   );
                                 },
