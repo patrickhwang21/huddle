@@ -42,6 +42,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const Expanded(
                     child: Text('My Events', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   ),
+                  IconButton(
+                    onPressed: () => Navigator.pushNamed(context, '/join-event'),
+                    tooltip: 'Join with event code',
+                    icon: const Icon(Icons.confirmation_number_outlined, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(width: 4),
                   GestureDetector(
                     onTap: () => Navigator.pushNamed(context, '/profile'),
                     child: const CircleAvatar(radius: 20, backgroundColor: Color(0xFFEEF2FF), child: Icon(Icons.person_rounded, color: AppColors.primary)),

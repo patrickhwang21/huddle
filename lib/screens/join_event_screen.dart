@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 
@@ -36,7 +37,13 @@ class _JoinEventScreenState extends State<JoinEventScreen> {
         return;
       }
       if (!mounted) return;
-      Navigator.pushNamed(context, '/guest-login', arguments: event.id);
+      if (AuthService.instance.currentUser != null) {
+        // Already signed in - join with the registered account, no need
+        // for the guest name/password flow.
+        Navigator.pushNamed(context, '/availability', arguments: event.id);
+      } else {
+        Navigator.pushNamed(context, '/guest-login', arguments: event.id);
+      }
     } catch (e) {
       _showError('Could not find event: $e');
     } finally {
